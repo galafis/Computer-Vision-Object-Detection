@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Computer Vision Object Detection</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 900px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #333; text-align: center; margin-bottom: 30px; }
+        .upload-area { border: 2px dashed #ddd; padding: 40px; text-align: center; margin: 20px 0; border-radius: 10px; }
+        .upload-area:hover { border-color: #007bff; background: #f8f9fa; }
+        input[type="file"] { display: none; }
+        .upload-btn { background: #007bff; color: white; padding: 12px 30px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; }
+        .upload-btn:hover { background: #0056b3; }
+        .result { margin-top: 20px; }
+        .image-container { text-align: center; margin: 20px 0; }
+        .detected-image { max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 5px; }
+        .detections { background: #f8f9fa; padding: 15px; border-radius: 5px; margin-top: 15px; }
+        .detection-item { background: white; padding: 10px; margin: 5px 0; border-radius: 3px; border-left: 4px solid #007bff; }
+        .webcam-btn { background: #28a745; color: white; padding: 12px 30px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; margin: 10px; }
+        .webcam-btn:hover { background: #218838; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Computer Vision Object Detection</h1>
+        
+        <div class="upload-area" onclick="document.getElementById(\'imageInput\').click()">
+            <p>Click here to upload an image for object detection</p>
+            <input type="file" id="imageInput" accept="image/*" onchange="uploadImage()">
+            <button class="upload-btn">Choose Image</button>
+        </div>
+        
+        <div style="text-align: center;">
+            <button class="webcam-btn" onclick="startWebcam()">Start Webcam Detection</button>
+            <p><small>Note: Webcam detection requires running the Python script locally</small></p>
+        </div>
+        
+        <div id="result" class="result"></div>
+    </div>
+
+    <script>
+        async function uploadImage() {
+            const input = document.getElementById(\'imageInput\');
+            const file = input.files[0];
+            
+            if (!file) return;
+            
+            const formData = new FormData();
+            formData.append(\'image\', file);
+            
+            try {
+                // This is a static demo. For actual detection, run the Flask app locally.
+                // The API endpoint would be http://localhost:5000/detect
+                alert("This is a static demo. Please run the Flask application locally to use the object detection functionality.");
+                document.getElementById(\'result\').innerHTML = \'<p style="color: orange;">Static demo: Please run the Flask app locally for detection.</p>\';
+                
+                // Example of how to call the API if the Flask app was running remotely:
+                /*
+                const response = await fetch(\'/detect\', { // Or your remote API endpoint
+                    method: \'POST\',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                displayResult(result);
+                */
+
+            } catch (error) {
+                console.error(\'Error:\', error);
+                document.getElementById(\'result\').innerHTML = \'<p style="color: red;">Error processing image</p>\';
+            }
+        }
+        
+        function displayResult(result) {
+            const resultDiv = document.getElementById(\'result\');
+            
+            let html = \'<div class="image-container">\';
+            html += `<img src="data:image/jpeg;base64,${result.image}" class="detected-image" alt="Detected Objects">`;
+            html += \'</div>\';
+            
+            if (result.detections && result.detections.length > 0) {
+                html += \'<div class="detections">\';
+                html += \'<h3>Detected Objects:</h3>\';
+                
+                result.detections.forEach(detection => {
+                    html += `
+                        <div class="detection-item">
+                            <strong>${detection.class}</strong> - 
+                            Confidence: ${(detection.confidence * 100).toFixed(1)}%<br>
+                            <small>Location: (${detection.bbox[0]}, ${detection.bbox[1]}) 
+                            Size: ${detection.bbox[2]}x${detection.bbox[3]}</small>
+                        </div>
+                    `;
+                });
+                
+                html += \'</div>\';
+            } else {
+                html += \'<div class="detections"><p>No objects detected in this image.</p></div>\';
+            }
+            
+            resultDiv.innerHTML = html;
+        }
+        
+        function startWebcam() {
+            alert(\'To use webcam detection, run the Python script locally with: python src/object_detector.py --webcam\');
+        }
+    </script>
+</body>
+</html>
+

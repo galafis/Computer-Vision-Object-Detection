@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 """
 Computer Vision Object Detection
@@ -12,87 +13,101 @@ from flask import Flask, request, jsonify, render_template_string
 import base64
 import io
 from PIL import Image
+import os
 
 class ObjectDetector:
     """Real-time object detection using YOLO and OpenCV."""
     
-    def __init__(self, config_path=None, weights_path=None, names_path=None):
+    def __init__(self, config_path=\'config/yolov3.cfg\', weights_path=\'config/yolov3.weights\', names_path=\'config/coco.names\'):
         self.net = None
         self.classes = []
         self.colors = []
         self.output_layers = []
         
-        # Default COCO classes (80 classes)
-        self.default_classes = [
-            "person", "bicycle", "car", "motorbike", "aeroplane", "bus", "train", "truck",
-            "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench",
-            "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra",
-            "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
-            "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove",
-            "skateboard", "surfboard", "tennis racket", "bottle", "wine glass", "cup",
-            "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange",
-            "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "sofa",
-            "pottedplant", "bed", "diningtable", "toilet", "tvmonitor", "laptop", "mouse",
-            "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink",
-            "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier",
-            "toothbrush"
-        ]
+        self.config_path = config_path
+        self.weights_path = weights_path
+        self.names_path = names_path
         
-        self.classes = self.default_classes
-        self.colors = np.random.uniform(0, 255, size=(len(self.classes), 3))
-        
-        # Initialize with OpenCV's DNN module (using pre-trained models)
         self.initialize_detector()
     
     def initialize_detector(self):
-        """Initialize the object detector."""
+        """Initialize the object detector with YOLOv3."""
         try:
-            # For demo purposes, we'll use OpenCV's built-in cascade classifiers
-            # In a real implementation, you would load YOLO weights here
-            self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-            self.eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye.xml')
-            print("Object detector initialized successfully!")
+            if not os.path.exists(self.weights_path):
+                raise FileNotFoundError(f"YOLOv3 weights file not found at {self.weights_path}. Please download it manually.")
+            if not os.path.exists(self.config_path):
+                raise FileNotFoundError(f"YOLOv3 config file not found at {self.config_path}. Please download it manually.")
+            if not os.path.exists(self.names_path):
+                raise FileNotFoundError(f"COCO names file not found at {self.names_path}. Please download it manually.")
+
+            # Load YOLO
+            self.net = cv2.dnn.readNet(self.weights_path, self.config_path)
+            self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
+            self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
+
+            with open(self.names_path, "r") as f:
+                self.classes = [line.strip() for line in f.readlines()]
+
+            self.output_layers = [self.net.getLayerNames()[i[0] - 1] for i in self.net.getUnconnectedOutLayers()]
+            self.colors = np.random.uniform(0, 255, size=(len(self.classes), 3))
+            print("YOLOv3 object detector initialized successfully!")
         except Exception as e:
-            print(f"Error initializing detector: {e}")
+            print(f"Error initializing YOLOv3 detector: {e}")
+            print("Please ensure yolov3.cfg, yolov3.weights, and coco.names are in the config/ directory.")
+            exit()
     
     def detect_objects(self, image):
-        """Detect objects in image."""
+        """Detect objects in image using YOLOv3."""
         height, width, channels = image.shape
         
-        # For demo purposes, we'll detect faces and eyes
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        # Create blob from image
+        blob = cv2.dnn.blobFromImage(image, 0.00392, (416, 416), (0, 0, 0), True, crop=False)
+        self.net.setInput(blob)
+        outs = self.net.forward(self.output_layers)
         
-        # Detect faces
-        faces = self.face_cascade.detectMultiScale(gray, 1.1, 4)
+        # Showing information on the screen
+        class_ids = []
+        confidences = []
+        boxes = []
+        for out in outs:
+            for detection in out:
+                scores = detection[5:]
+                class_id = np.argmax(scores)
+                confidence = scores[class_id]
+                if confidence > 0.5:
+                    # Object detected
+                    center_x = int(detection[0] * width)
+                    center_y = int(detection[1] * height)
+                    w = int(detection[2] * width)
+                    h = int(detection[3] * height)
+                    
+                    # Rectangle coordinates
+                    x = int(center_x - w / 2)
+                    y = int(center_y - h / 2)
+                    
+                    boxes.append([x, y, w, h])
+                    confidences.append(float(confidence))
+                    class_ids.append(class_id)
         
-        detections = []
+        indexes = cv2.dnn.NMSBoxes(boxes, confidences, 0.5, 0.4)
         
-        for (x, y, w, h) in faces:
-            # Draw rectangle around face
-            cv2.rectangle(image, (x, y), (x+w, y+h), (255, 0, 0), 2)
-            
-            # Add label
-            label = "Person"
-            confidence = 0.85  # Mock confidence
-            
-            cv2.putText(image, f"{label}: {confidence:.2f}", 
-                       (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
-            
-            detections.append({
-                'class': label,
-                'confidence': confidence,
-                'bbox': [x, y, w, h]
-            })
-            
-            # Detect eyes in face region
-            roi_gray = gray[y:y+h, x:x+w]
-            roi_color = image[y:y+h, x:x+w]
-            eyes = self.eye_cascade.detectMultiScale(roi_gray)
-            
-            for (ex, ey, ew, eh) in eyes:
-                cv2.rectangle(roi_color, (ex, ey), (ex+ew, ey+eh), (0, 255, 0), 2)
+        detections_list = []
+        font = cv2.FONT_HERSHEY_PLAIN
+        for i in range(len(boxes)):
+            if i in indexes:
+                x, y, w, h = boxes[i]
+                label = str(self.classes[class_ids[i]])
+                color = self.colors[class_ids[i]]
+                cv2.rectangle(image, (x, y), (x + w, y + h), color, 2)
+                cv2.putText(image, label, (x, y + 30), font, 3, color, 3)
+                
+                detections_list.append({
+                    \"class\": label,
+                    \"confidence\": confidences[i],
+                    \"bbox\": [x, y, w, h]
+                })
         
-        return image, detections
+        return image, detections_list
     
     def detect_from_webcam(self):
         """Real-time detection from webcam."""
@@ -102,7 +117,7 @@ class ObjectDetector:
             print("Error: Could not open webcam")
             return
         
-        print("Press 'q' to quit")
+        print("Press \"q\" to quit")
         
         while True:
             ret, frame = cap.read()
@@ -118,9 +133,9 @@ class ObjectDetector:
                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             
             # Show frame
-            cv2.imshow('Object Detection', result_frame)
+            cv2.imshow(\'Object Detection\', result_frame)
             
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+            if cv2.waitKey(1) & 0xFF == ord(\'q\'):
                 break
         
         cap.release()
@@ -138,7 +153,14 @@ class ObjectDetector:
 
 # Flask Web Application
 app = Flask(__name__)
-detector = ObjectDetector()
+
+# Adjust paths for Flask app context
+base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), \'..\'))
+detector = ObjectDetector(
+    config_path=os.path.join(base_dir, \'config\', \'yolov3.cfg\'),
+    weights_path=os.path.join(base_dir, \'config\', \'yolov3.weights\'),
+    names_path=os.path.join(base_dir, \'config\', \'coco.names\')
+)
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -169,7 +191,7 @@ HTML_TEMPLATE = """
     <div class="container">
         <h1>🔍 Computer Vision Object Detection</h1>
         
-        <div class="upload-area" onclick="document.getElementById('imageInput').click()">
+        <div class="upload-area" onclick="document.getElementById(\'imageInput\').click()">
             <p>Click here to upload an image for object detection</p>
             <input type="file" id="imageInput" accept="image/*" onchange="uploadImage()">
             <button class="upload-btn">Choose Image</button>
@@ -185,38 +207,47 @@ HTML_TEMPLATE = """
 
     <script>
         async function uploadImage() {
-            const input = document.getElementById('imageInput');
+            const input = document.getElementById(\'imageInput\');
             const file = input.files[0];
             
             if (!file) return;
             
             const formData = new FormData();
-            formData.append('image', file);
+            formData.append(\'image\', file);
             
             try {
-                const response = await fetch('/detect', {
-                    method: 'POST',
+                // This is a static demo. For actual detection, run the Flask app locally.
+                // The API endpoint would be http://localhost:5000/detect
+                alert("This is a static demo. Please run the Flask application locally to use the object detection functionality.");
+                document.getElementById(\'result\').innerHTML = \'<p style="color: orange;">Static demo: Please run the Flask app locally for detection.</p>\';
+                
+                // Example of how to call the API if the Flask app was running remotely:
+                /*
+                const response = await fetch(\'/detect\', { // Or your remote API endpoint
+                    method: \'POST\',
                     body: formData
                 });
                 
                 const result = await response.json();
                 displayResult(result);
+                */
+
             } catch (error) {
-                console.error('Error:', error);
-                document.getElementById('result').innerHTML = '<p style="color: red;">Error processing image</p>';
+                console.error(\'Error:\', error);
+                document.getElementById(\'result\').innerHTML = \'<p style="color: red;">Error processing image</p>\';
             }
         }
         
         function displayResult(result) {
-            const resultDiv = document.getElementById('result');
+            const resultDiv = document.getElementById(\'result\');
             
-            let html = '<div class="image-container">';
+            let html = \'<div class="image-container">\';
             html += `<img src="data:image/jpeg;base64,${result.image}" class="detected-image" alt="Detected Objects">`;
-            html += '</div>';
+            html += \'</div>\';
             
             if (result.detections && result.detections.length > 0) {
-                html += '<div class="detections">';
-                html += '<h3>Detected Objects:</h3>';
+                html += \'<div class="detections">\';
+                html += \'<h3>Detected Objects:</h3>\';
                 
                 result.detections.forEach(detection => {
                     html += `
@@ -229,36 +260,36 @@ HTML_TEMPLATE = """
                     `;
                 });
                 
-                html += '</div>';
+                html += \'</div>\';
             } else {
-                html += '<div class="detections"><p>No objects detected in this image.</p></div>';
+                html += \'<div class="detections"><p>No objects detected in this image.</p></div>\';
             }
             
             resultDiv.innerHTML = html;
         }
         
         function startWebcam() {
-            alert('To use webcam detection, run the Python script locally with: python object_detector.py --webcam');
+            alert(\'To use webcam detection, run the Python script locally with: python src/object_detector.py --webcam\');
         }
     </script>
 </body>
 </html>
 """
 
-@app.route('/')
+@app.route("/", methods=["GET"])
 def index():
     """Main page."""
     return render_template_string(HTML_TEMPLATE)
 
-@app.route('/detect', methods=['POST'])
+@app.route("/detect", methods=["POST"])
 def detect():
     """Detect objects in uploaded image."""
-    if 'image' not in request.files:
-        return jsonify({'error': 'No image provided'}), 400
+    if "image" not in request.files:
+        return jsonify({"error": "No image provided"}), 400
     
-    file = request.files['image']
-    if file.filename == '':
-        return jsonify({'error': 'No image selected'}), 400
+    file = request.files["image"]
+    if file.filename == "":
+        return jsonify({"error": "No image selected"}), 400
     
     try:
         # Read image
@@ -270,23 +301,23 @@ def detect():
         result_image, detections = detector.detect_objects(image)
         
         # Encode result image
-        _, buffer = cv2.imencode('.jpg', result_image)
-        image_base64 = base64.b64encode(buffer).decode('utf-8')
+        _, buffer = cv2.imencode(".jpg", result_image)
+        image_base64 = base64.b64encode(buffer).decode("utf-8")
         
         return jsonify({
-            'image': image_base64,
-            'detections': detections
+            "image": image_base64,
+            "detections": detections
         })
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 def main():
     """Main execution function."""
-    parser = argparse.ArgumentParser(description='Computer Vision Object Detection')
-    parser.add_argument('--webcam', action='store_true', help='Use webcam for real-time detection')
-    parser.add_argument('--image', type=str, help='Path to image file')
-    parser.add_argument('--web', action='store_true', help='Start web server')
+    parser = argparse.ArgumentParser(description="Computer Vision Object Detection")
+    parser.add_argument("--webcam", action="store_true", help="Use webcam for real-time detection")
+    parser.add_argument("--image", type=str, help="Path to image file")
+    parser.add_argument("--web", action="store_true", help="Start web server")
     
     args = parser.parse_args()
     
@@ -302,7 +333,7 @@ def main():
         if result_image is not None:
             print(f"Found {len(detections)} objects:")
             for detection in detections:
-                print(f"  - {detection['class']}: {detection['confidence']:.2f}")
+                print(f"  - {detection[\"class\"]}: {detection[\"confidence\"]:.2f}")
             
             # Save result
             output_path = f"detected_{args.image}"
@@ -311,8 +342,9 @@ def main():
     else:
         print("Starting web server...")
         print("Open http://localhost:5000 in your browser")
-        app.run(debug=True, host='0.0.0.0', port=5000)
+        app.run(debug=True, host="0.0.0.0", port=5000)
 
 if __name__ == "__main__":
     main()
+
 

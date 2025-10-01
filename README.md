@@ -1,3 +1,5 @@
+![Hero Image](docs/hero_image.png)
+
 # Computer Vision Object Detection
 
 [English](#english) | [Português](#português)
@@ -280,23 +282,3 @@ Personalize parâmetros de detecção em `config.json`:
 ### Licença
 Este projeto está licenciado sob a Licença MIT - veja o arquivo [LICENSE](LICENSE) para detalhes.
 
-
-
-## 📋 Descrição
-
-Descreva aqui o conteúdo desta seção.
-
-
-## 📦 Instalação
-
-Descreva aqui o conteúdo desta seção.
-
-
-## 💻 Uso
-
-Descreva aqui o conteúdo desta seção.
-
-
-## 📄 Licença
-
-Descreva aqui o conteúdo desta seção.

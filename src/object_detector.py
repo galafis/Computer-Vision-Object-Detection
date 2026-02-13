@@ -7,11 +7,9 @@ Real-time object detection system using OpenCV and pre-trained models.
 import cv2  # type: ignore[import-not-found]
 import numpy as np
 import argparse
-import time
 from flask import Flask, request, jsonify, render_template_string
 import base64
 import io
-from PIL import Image
 import os
 
 
@@ -53,16 +51,26 @@ class ObjectDetector:
 
             # Load YOLO
             self.net = cv2.dnn.readNet(self.weights_path, self.config_path)
-            self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
-            self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
+
+            # Use CUDA if available, otherwise fall back to CPU
+            if cv2.cuda.getCudaEnabledDeviceCount() > 0:
+                self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
+                self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
+            else:
+                self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
+                self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
 
             with open(self.names_path, "r") as f:
                 self.classes = [line.strip() for line in f.readlines()]
 
-            self.output_layers = [
-                self.net.getLayerNames()[i[0] - 1]
-                for i in self.net.getUnconnectedOutLayers()
-            ]
+            layer_names = self.net.getLayerNames()
+            unconnected = self.net.getUnconnectedOutLayers()
+            if len(unconnected.shape) == 2:
+                # OpenCV < 4.5.4: returns [[idx1], [idx2], ...]
+                self.output_layers = [layer_names[i[0] - 1] for i in unconnected]
+            else:
+                # OpenCV >= 4.5.4: returns [idx1, idx2, ...]
+                self.output_layers = [layer_names[i - 1] for i in unconnected]
             self.colors = np.random.uniform(0, 255, size=(len(self.classes), 3))
             print("YOLOv3 object detector initialized successfully!")
         except Exception as e:
@@ -70,7 +78,8 @@ class ObjectDetector:
             print(
                 "Please ensure yolov3.cfg, yolov3.weights, and coco.names are in the config/ directory."
             )
-            exit()
+            self.net = None
+            return
 
     def detect_objects(self, image):
         """Detect objects in image using YOLOv3."""
@@ -181,13 +190,21 @@ class ObjectDetector:
 # Flask Web Application
 app = Flask(__name__)
 
-# Adjust paths for Flask app context
-base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-detector = ObjectDetector(
-    config_path=os.path.join(base_dir, "config", "yolov3.cfg"),
-    weights_path=os.path.join(base_dir, "config", "yolov3.weights"),
-    names_path=os.path.join(base_dir, "config", "coco.names"),
-)
+# Lazy detector initialization
+_detector = None
+
+
+def get_detector():
+    """Lazily initialize the detector when first needed."""
+    global _detector
+    if _detector is None:
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        _detector = ObjectDetector(
+            config_path=os.path.join(base_dir, "config", "yolov3.cfg"),
+            weights_path=os.path.join(base_dir, "config", "yolov3.weights"),
+            names_path=os.path.join(base_dir, "config", "coco.names"),
+        )
+    return _detector
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -327,7 +344,7 @@ def detect():
         image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
         # Detect objects
-        result_image, detections = detector.detect_objects(image)
+        result_image, detections = get_detector().detect_objects(image)
 
         # Encode result image
         _, buffer = cv2.imencode(".jpg", result_image)
@@ -355,23 +372,23 @@ def main():
 
     if args.webcam:
         print("Starting webcam detection...")
-        detector.detect_from_webcam()
+        get_detector().detect_from_webcam()
     elif args.image:
         print(f"Processing image: {args.image}")
-        result_image, detections = detector.detect_from_image(args.image)
+        result_image, detections = get_detector().detect_from_image(args.image)
         if result_image is not None:
             print(f"Found {len(detections)} objects:")
             for detection in detections:
                 print(f"  - {detection['class']}: {detection['confidence']:.2f}")
 
             # Save result
-            output_path = f"detected_{args.image}"
+            output_path = os.path.join(os.path.dirname(args.image), f"detected_{os.path.basename(args.image)}")
             cv2.imwrite(output_path, result_image)
             print(f"Result saved to: {output_path}")
     else:
         print("Starting web server...")
         print("Open http://localhost:5000 in your browser")
-        app.run(debug=True, host="0.0.0.0", port=5000)
+        app.run(debug=False, host="0.0.0.0", port=5000)
 
 
 if __name__ == "__main__":

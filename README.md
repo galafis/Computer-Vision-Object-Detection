@@ -1,59 +1,91 @@
+<div align="center">
+
 # Computer Vision Object Detection
 
-Deteccao de objetos em imagens e video usando YOLOv3 com OpenCV DNN.
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![OpenCV](https://img.shields.io/badge/OpenCV-4.5+-5C3EE8?style=for-the-badge&logo=opencv&logoColor=white)](https://opencv.org)
+[![Flask](https://img.shields.io/badge/Flask-3.0-000000?style=for-the-badge&logo=flask&logoColor=white)](https://flask.palletsprojects.com)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](Dockerfile)
+[![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
 
-[![Python](https://img.shields.io/badge/Python-3.12-3776AB.svg)](https://python.org)
-[![OpenCV](https://img.shields.io/badge/OpenCV-4.5+-5C3EE8.svg)](https://opencv.org)
-[![Flask](https://img.shields.io/badge/Flask-3.0-000000.svg)](https://flask.palletsprojects.com)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker)](Dockerfile)
+Sistema de deteccao de objetos em imagens e video utilizando YOLOv3 com OpenCV DNN.
 
-[English](#english) | [Portugues](#portugues)
+Object detection system for images and video using YOLOv3 with OpenCV DNN.
+
+[Portugues](#portugues) | [English](#english)
+
+</div>
 
 ---
 
 ## Portugues
 
-### Visao Geral
+### Sobre
 
-Sistema de deteccao de objetos que utiliza o modelo YOLOv3 pre-treinado (COCO dataset — 80 classes) via OpenCV DNN. Suporta tres modos de operacao: deteccao em imagens estaticas, deteccao em tempo real via webcam, e upload de imagens via interface web Flask.
+Este projeto implementa um sistema completo de deteccao de objetos utilizando o modelo YOLOv3 pre-treinado no dataset COCO (80 classes). O sistema oferece tres modos de operacao: deteccao em imagens estaticas, deteccao em tempo real via webcam e uma interface web construida com Flask para upload de imagens. O foco didatico esta na compreensao do pipeline de visao computacional, desde o pre-processamento da imagem ate a aplicacao de Non-Maximum Suppression (NMS) para filtrar deteccoes redundantes.
 
-**Importante:** Os arquivos do modelo YOLOv3 (~237 MB) nao estao incluidos no repositorio e devem ser baixados separadamente.
+### Tecnologias
+
+| Tecnologia | Versao | Finalidade |
+|------------|--------|------------|
+| Python | 3.11+ | Linguagem principal |
+| OpenCV DNN | 4.5+ | Inferencia do modelo YOLOv3 |
+| NumPy | 1.21+ | Manipulacao de arrays e tensores |
+| Flask | 3.0+ | Interface web para upload de imagens |
+| YOLOv3 | COCO | Modelo pre-treinado com 80 classes |
+| Docker | - | Containerizacao da aplicacao |
 
 ### Arquitetura
 
 ```mermaid
-graph TB
-    subgraph Entrada["Entrada"]
+graph TD
+    subgraph Entrada["Entrada de Dados"]
         A[Imagem Estatica]
         B[Webcam]
-        C[Upload Web]
+        C[Upload Web Flask]
     end
 
-    subgraph Detector["ObjectDetector"]
-        D[OpenCV DNN]
-        E[YOLOv3]
-        F[NMS - Non-Max Suppression]
+    subgraph Pipeline["Pipeline de Deteccao"]
+        D[Blob Preprocessing 416x416]
+        E[OpenCV DNN Forward Pass]
+        F[YOLOv3 Inference]
+        G[NMS - Non-Max Suppression]
     end
 
     subgraph Saida["Saida"]
-        G[Imagem Anotada]
-        H[Lista de Deteccoes JSON]
+        H[Imagem Anotada com Bounding Boxes]
+        I[Lista de Deteccoes JSON]
     end
 
     A --> D
     B --> D
-    C -->|Flask /detect| D
-    D --> E --> F
-    F --> G
-    F --> H
+    C -->|POST /detect| D
+    D --> E --> F --> G
+    G --> H
+    G --> I
 ```
 
-### Pre-requisitos
+### Estrutura do Projeto
 
-#### Baixar Arquivos do Modelo YOLOv3
+```
+Computer-Vision-Object-Detection/
+├── config/                        # Arquivos do modelo (download manual)
+│   ├── yolov3.cfg                 # Configuracao da rede YOLOv3
+│   ├── yolov3.weights             # Pesos pre-treinados (~237 MB)
+│   └── coco.names                 # Nomes das 80 classes COCO
+├── src/
+│   ├── __init__.py
+│   └── object_detector.py         # Modulo principal com classe ObjectDetector
+├── .gitignore
+├── Dockerfile
+├── LICENSE
+├── README.md
+└── requirements.txt
+```
 
-Crie o diretorio `config/` e baixe os 3 arquivos necessarios:
+### Quick Start
+
+#### 1. Baixar Arquivos do Modelo
 
 ```bash
 mkdir -p config
@@ -64,105 +96,130 @@ wget https://pjreddie.com/media/files/yolov3.weights -O config/yolov3.weights
 # Configuracao do YOLOv3
 wget https://raw.githubusercontent.com/pjreddie/darknet/master/cfg/yolov3.cfg -O config/yolov3.cfg
 
-# Nomes das classes COCO (80 classes)
+# Nomes das classes COCO
 wget https://raw.githubusercontent.com/pjreddie/darknet/master/data/coco.names -O config/coco.names
 ```
 
-### Como Executar
+#### 2. Instalar e Executar
 
 ```bash
-# Instalar dependencias
 pip install -r requirements.txt
 
-# Deteccao em imagem
+# Deteccao em imagem estatica
 python src/object_detector.py --image caminho/para/imagem.jpg
 
-# Deteccao via webcam (tempo real)
+# Deteccao em tempo real via webcam
 python src/object_detector.py --webcam
 
-# Interface web (upload de imagens)
+# Interface web (http://localhost:5000)
 python src/object_detector.py --web
-# Acesse http://localhost:5000
 ```
+
+### Docker
+
+```bash
+docker build -t cv-object-detection .
+docker run -p 5000:5000 cv-object-detection
+```
+
+> **Nota:** Os arquivos do modelo YOLOv3 devem estar no diretorio `config/` antes do build.
 
 ### Modos de Operacao
 
 | Modo | Comando | Descricao |
 |------|---------|-----------|
-| Imagem | `--image <path>` | Detecta objetos em uma imagem e salva resultado |
-| Webcam | `--webcam` | Deteccao em tempo real via webcam |
-| Web | `--web` ou sem argumentos | Interface web Flask para upload |
+| Imagem | `--image <caminho>` | Detecta objetos e salva imagem anotada |
+| Webcam | `--webcam` | Deteccao em tempo real com exibicao de FPS |
+| Web | `--web` | Interface Flask para upload via navegador |
 
-### Estrutura do Projeto
+### Testes
 
-```
-Computer-Vision-Object-Detection/
-├── config/                    # Arquivos do modelo (nao incluidos)
-│   ├── yolov3.cfg
-│   ├── yolov3.weights
-│   └── coco.names
-├── src/
-│   ├── __init__.py
-│   └── object_detector.py    # Modulo principal (~350 linhas)
-├── LICENSE
-├── README.md
-└── requirements.txt
+```bash
+# Testar deteccao em imagem
+python src/object_detector.py --image test_image.jpg
+
+# Verificar se o modelo carrega corretamente
+python -c "from src.object_detector import ObjectDetector; print('OK')"
 ```
 
-### Tecnologias
+### Aprendizados
 
-| Tecnologia | Uso |
-|------------|-----|
-| Python | Linguagem principal |
-| OpenCV DNN | Inferencia do modelo YOLOv3 |
-| NumPy | Processamento de arrays |
-| Flask | Interface web para upload |
-| YOLOv3 | Modelo pre-treinado (COCO, 80 classes) |
+- Pipeline completo de visao computacional com YOLOv3 e OpenCV DNN
+- Aplicacao de Non-Maximum Suppression para eliminacao de deteccoes duplicadas
+- Utilizacao de CUDA para aceleracao por GPU quando disponivel
+- Construcao de interface web com Flask para servir modelos de deep learning
+- Containerizacao de aplicacoes de visao computacional com Docker
 
 ---
 
 ## English
 
-### Overview
+### About
 
-Object detection system using the pre-trained YOLOv3 model (COCO dataset — 80 classes) via OpenCV DNN. Supports three modes: static image detection, real-time webcam detection, and image upload via a Flask web interface.
+This project implements a complete object detection system using the pre-trained YOLOv3 model on the COCO dataset (80 classes). The system provides three operation modes: static image detection, real-time webcam detection, and a Flask-based web interface for image uploads. The educational focus is on understanding the computer vision pipeline, from image preprocessing to applying Non-Maximum Suppression (NMS) for filtering redundant detections.
 
-**Important:** YOLOv3 model files (~237 MB) are not included in the repository and must be downloaded separately.
+### Technologies
+
+| Technology | Version | Purpose |
+|------------|---------|---------|
+| Python | 3.11+ | Core language |
+| OpenCV DNN | 4.5+ | YOLOv3 model inference |
+| NumPy | 1.21+ | Array and tensor manipulation |
+| Flask | 3.0+ | Web interface for image upload |
+| YOLOv3 | COCO | Pre-trained model with 80 classes |
+| Docker | - | Application containerization |
 
 ### Architecture
 
 ```mermaid
-graph TB
-    subgraph Input["Input"]
+graph TD
+    subgraph Input["Data Input"]
         A[Static Image]
         B[Webcam]
-        C[Web Upload]
+        C[Web Upload Flask]
     end
 
-    subgraph Detector["ObjectDetector"]
-        D[OpenCV DNN]
-        E[YOLOv3]
-        F[NMS - Non-Max Suppression]
+    subgraph Pipeline["Detection Pipeline"]
+        D[Blob Preprocessing 416x416]
+        E[OpenCV DNN Forward Pass]
+        F[YOLOv3 Inference]
+        G[NMS - Non-Max Suppression]
     end
 
     subgraph Output["Output"]
-        G[Annotated Image]
-        H[Detections List JSON]
+        H[Annotated Image with Bounding Boxes]
+        I[Detections List JSON]
     end
 
     A --> D
     B --> D
-    C -->|Flask /detect| D
-    D --> E --> F
-    F --> G
-    F --> H
+    C -->|POST /detect| D
+    D --> E --> F --> G
+    G --> H
+    G --> I
 ```
 
-### Prerequisites
+### Project Structure
 
-#### Download YOLOv3 Model Files
+```
+Computer-Vision-Object-Detection/
+├── config/                        # Model files (manual download)
+│   ├── yolov3.cfg                 # YOLOv3 network configuration
+│   ├── yolov3.weights             # Pre-trained weights (~237 MB)
+│   └── coco.names                 # 80 COCO class names
+├── src/
+│   ├── __init__.py
+│   └── object_detector.py         # Main module with ObjectDetector class
+├── .gitignore
+├── Dockerfile
+├── LICENSE
+├── README.md
+└── requirements.txt
+```
 
-Create the `config/` directory and download the 3 required files:
+### Quick Start
+
+#### 1. Download Model Files
 
 ```bash
 mkdir -p config
@@ -173,63 +230,69 @@ wget https://pjreddie.com/media/files/yolov3.weights -O config/yolov3.weights
 # YOLOv3 configuration
 wget https://raw.githubusercontent.com/pjreddie/darknet/master/cfg/yolov3.cfg -O config/yolov3.cfg
 
-# COCO class names (80 classes)
+# COCO class names
 wget https://raw.githubusercontent.com/pjreddie/darknet/master/data/coco.names -O config/coco.names
 ```
 
-### How to Run
+#### 2. Install and Run
 
 ```bash
-# Install dependencies
 pip install -r requirements.txt
 
-# Image detection
+# Static image detection
 python src/object_detector.py --image path/to/image.jpg
 
-# Webcam detection (real-time)
+# Real-time webcam detection
 python src/object_detector.py --webcam
 
-# Web interface (image upload)
+# Web interface (http://localhost:5000)
 python src/object_detector.py --web
-# Open http://localhost:5000
 ```
+
+### Docker
+
+```bash
+docker build -t cv-object-detection .
+docker run -p 5000:5000 cv-object-detection
+```
+
+> **Note:** YOLOv3 model files must be in the `config/` directory before building.
 
 ### Operation Modes
 
 | Mode | Command | Description |
 |------|---------|-------------|
-| Image | `--image <path>` | Detect objects in an image and save result |
-| Webcam | `--webcam` | Real-time detection via webcam |
-| Web | `--web` or no args | Flask web interface for upload |
+| Image | `--image <path>` | Detect objects and save annotated image |
+| Webcam | `--webcam` | Real-time detection with FPS display |
+| Web | `--web` | Flask interface for browser upload |
 
-### Project Structure
+### Tests
 
-```
-Computer-Vision-Object-Detection/
-├── config/                    # Model files (not included)
-│   ├── yolov3.cfg
-│   ├── yolov3.weights
-│   └── coco.names
-├── src/
-│   ├── __init__.py
-│   └── object_detector.py    # Main module (~350 lines)
-├── LICENSE
-├── README.md
-└── requirements.txt
+```bash
+# Test image detection
+python src/object_detector.py --image test_image.jpg
+
+# Verify model loads correctly
+python -c "from src.object_detector import ObjectDetector; print('OK')"
 ```
 
-### Technologies
+### Learnings
 
-| Technology | Usage |
-|------------|-------|
-| Python | Core language |
-| OpenCV DNN | YOLOv3 model inference |
-| NumPy | Array processing |
-| Flask | Web interface for upload |
-| YOLOv3 | Pre-trained model (COCO, 80 classes) |
+- End-to-end computer vision pipeline with YOLOv3 and OpenCV DNN
+- Non-Maximum Suppression for eliminating duplicate detections
+- CUDA acceleration for GPU-enabled inference when available
+- Building web interfaces with Flask for serving deep learning models
+- Containerizing computer vision applications with Docker
 
 ---
 
-**Autor / Author:** Gabriel Demetrios Lafis
-- GitHub: [@galafis](https://github.com/galafis)
-- LinkedIn: [Gabriel Demetrios Lafis](https://linkedin.com/in/gabriel-demetrios-lafis)
+### Autor / Author
+
+**Gabriel Demetrios Lafis**
+
+[![GitHub](https://img.shields.io/badge/GitHub-galafis-181717?style=flat&logo=github)](https://github.com/galafis)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-Gabriel%20Demetrios%20Lafis-0A66C2?style=flat&logo=linkedin)](https://linkedin.com/in/gabriel-demetrios-lafis)
+
+### Licenca / License
+
+Este projeto esta licenciado sob a [MIT License](LICENSE).
